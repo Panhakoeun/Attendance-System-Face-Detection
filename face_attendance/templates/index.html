@@ -9,6 +9,7 @@
 </head>
 
 <body class="bg-gray-50 text-slate-900 min-h-screen flex flex-col">
+    <!-- Header -->
     <header class="bg-blue-600/90 backdrop-blur border-b">
         <div class="max-w-6xl mx-auto px-4 sm:px-6">
             <div class="h-16 flex items-center justify-between">
@@ -16,67 +17,124 @@
                     <img class="w-9 h-9" src="/logo.png" alt="Logo">
                     <span class="font-semibold text-lg text-white">Attendance System Face Detection</span>
                 </div>
-                
             </div>
         </div>
     </header>
+
+    <!-- Main -->
     <main class="flex-1">
-    <div class="max-w-6xl mx-auto p-6">
-        <div class="text-center mb-8">
-            <h1 class="text-3xl font-bold tracking-tight">Face Attendance System</h1>
-            <p class="mt-2 text-slate-600 text-sm">Register once, then check in securely using your webcam. View staff attendance records below.</p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Register Face -->
-            <div class="bg-white p-5 rounded-xl border shadow-sm">
-                <h2 class="text-xl font-semibold mb-3">Register Face</h2>
-                <form id="registerForm" class="space-y-4">
-                    <input name="name" id="regName" class="w-full border p-2 rounded"
-                        placeholder="Enter staff name" />
-                    <input name="image" id="regImage" type="file" accept="image/*" class="w-full" />
-                    <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full sm:w-auto" type="submit">Register New User</button>
-                </form>
-                <div id="regResult" class="mt-2 text-sm text-green-700"></div>
+        <div class="max-w-6xl mx-auto p-6">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold tracking-tight">Face Attendance System</h1>
+                <p class="mt-2 text-slate-600 text-sm">Register once, then check in securely using your webcam. View staff attendance records below.</p>
             </div>
 
-            <!-- Recognize Face -->
-            <div class="bg-white p-5 rounded-xl border shadow-sm">
-                <h2 class="text-xl font-semibold mb-3">Scan / Recognize</h2>
-                <button id="scanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded mb-3">Scan Your Face</button>
-                <div id="webcamArea" class="hidden">
-                    <div class="aspect-video w-full max-w-xl bg-slate-100 rounded border flex items-center justify-center overflow-hidden">
-                        <video id="video" autoplay playsinline class="w-full h-auto"></video>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Register Face -->
+                <div class="bg-white p-5 rounded-xl border shadow-sm">
+                    <h2 class="text-xl font-semibold mb-3">Register Face</h2>
+                    <form id="registerForm" class="space-y-4">
+                        <input name="name" id="regName" class="w-full border p-2 rounded"
+                            placeholder="Enter staff name" />
+                        <div class="flex items-center gap-2 border p-2 rounded">
+                            <!-- Added image icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M3 5h18M3 19h18M4 7h16v10H4V7zM8 7v10M16 7v10" />
+                            </svg>
+                            <input name="image" id="regImage" type="file" accept="image/*" class="w-full outline-none bg-transparent" />
+                        </div>
+                        <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded w-full sm:w-auto flex items-center gap-2" type="submit">
+                            <!-- Added user icon -->
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                                viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M5.121 17.804A9 9 0 1118.88 6.196 9 9 0 015.121 17.804z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            Register New User
+                        </button>
+                    </form>
+                    <div id="regResult" class="mt-2 text-sm text-green-700"></div>
+                </div>
+
+                <!-- Recognize Face -->
+                <div class="bg-white p-5 rounded-xl border shadow-sm">
+                    <h2 class="text-xl font-semibold mb-3">Scan / Recognize</h2>
+                    <button id="scanBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded mb-3 flex items-center gap-2">
+                        <!-- Added camera icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 8l3-3h12l3 3v11a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 11a3 3 0 100 6 3 3 0 000-6z" />
+                        </svg>
+                        Open Camera
+                    </button>
+                    <div id="webcamArea" class="hidden">
+                        <div class="aspect-video w-full max-w-xl bg-slate-100 rounded border flex items-center justify-center overflow-hidden">
+                            <video id="video" autoplay playsinline class="w-full h-auto"></video>
+                        </div>
+                        <canvas id="canvas" width="320" height="240" class="hidden"></canvas>
+                        <div class="mt-3 flex gap-3">
+                            <button id="captureBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded flex items-center gap-2">
+                                <!-- Added scan icon -->
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M3 7v4a2 2 0 002 2h4M21 17v-4a2 2 0 00-2-2h-4" />
+                                </svg>
+                                Capture & Scan
+                            </button>
+                            <button id="closeCamBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded flex items-center gap-2">
+                                <!-- Added power icon -->
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                                    viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 3v9" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M5.05 6.05a9 9 0 1113.9 12.9 9 9 0 01-13.9-12.9z" />
+                                </svg>
+                                Close
+                            </button>
+                        </div>
                     </div>
-                    <canvas id="canvas" width="320" height="240" class="hidden"></canvas>
-                    <div class="mt-3 flex gap-3">
-                        <button id="captureBtn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Capture & Scan</button>
-                        <button id="closeCamBtn" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded">Close</button>
+                    <div id="recResult" class="mt-3 text-sm text-blue-700"></div>
+                </div>
+            </div>
+
+            <!-- Attendance Records -->
+            <div class="bg-white-200 p-6 rounded-xl border shadow-sm mt-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-semibold">Staff Attendance</h2>
+                    <button id="loadBtn" class="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded flex items-center gap-2">
+                        <!-- Added users icon -->
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none"
+                            viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20h6M12 4a4 4 0 110 8 4 4 0 010-8z" />
+                        </svg>
+                        Load Attendance
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div>
+                        <h3 class="font-semibold mb-2">Names</h3>
+                        <div id="userNames" class="space-y-2"></div>
+                    </div>
+                    <div class="md:col-span-2">
+                        <h3 id="userTitle" class="font-semibold mb-2">Select a name to view attendance</h3>
+                        <div id="userAttendance" class="overflow-auto"></div>
                     </div>
                 </div>
-                <div id="recResult" class="mt-3 text-sm text-blue-700"></div>
             </div>
         </div>
-
-        <!-- Attendance Records -->
-        <div class="bg-white-200 p-6 rounded-xl border shadow-sm mt-8">
-            <div class=" flex items-center justify-between mb-4">
-                <h2 class="text-xl font-semibold">Staff Attendance</h2>
-                <button id="loadBtn" class="bg-yellow-500 hover:bg-yellow-600 text-black px-4 py-2 rounded">Load Attendance</button>
-            </div>
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                    <h3 class="font-semibold mb-2">Names</h3>
-                    <div id="userNames" class="space-y-2"></div>
-                </div>
-                <div class="md:col-span-2">
-                    <h3 id="userTitle" class="font-semibold mb-2">Select a name to view attendance</h3>
-                    <div id="userAttendance" class="overflow-auto"></div>
-                </div>
-            </div>
-        </div>
-    </div>
     </main>
+
+    <!-- Footer -->
     <footer class="mt-10 border-t bg-blue-600">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 text-sm text-white flex flex-col sm:flex-row gap-2 items-center justify-between">
             <p>&copy; <span id="year"></span> Face Attendance</p>
