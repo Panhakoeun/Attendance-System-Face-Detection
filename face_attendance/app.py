@@ -1,18 +1,20 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, url_for, send_from_directory
 import os
 import csv
 from datetime import datetime, timedelta
 import face_recognition
 import numpy as np
+from werkzeug.utils import secure_filename
 
 # === Setup base directory ===
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-app = Flask(
-    __name__,
-    template_folder=os.path.join(BASE_DIR, "templates"),
-    static_folder=os.path.join(BASE_DIR, "static")
-)
+app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
+
+# Ensure upload folder exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # === Create required folders ===
 for folder in ["uploads", "data", "exports", "known_faces"]:
@@ -85,7 +87,25 @@ def _next_id(csv_path):
 # === Routes ===
 @app.route("/")
 def index():
-    return render_template("index.html")
+    try:
+        return render_template("index.html")
+    except Exception as e:
+        return f"Error loading template: {str(e)}"
+
+# Serve static files
+@app.route('/static/<path:path>')
+def serve_static(path):
+    return send_from_directory('static', path)
+
+# Serve logo - consolidated route
+@app.route('/logo.png')
+def serve_logo():
+    # First try the root directory
+    root_logo = os.path.join(os.path.dirname(BASE_DIR), "logo.png")
+    if os.path.exists(root_logo):
+        return send_file(root_logo)
+    # Then try the static folder
+    return send_from_directory('static', 'logo.png')
 
 @app.route("/api/register", methods=["POST"])
 def register_face():
@@ -126,34 +146,61 @@ def recognize_face():
 
     test_encodings = face_recognition.face_encodings(test_image, face_locations)
     detections = []
+    unknown_face_encodings = []
+    unknown_face_locations = []
 
     now = datetime.now()
     date = now.strftime("%Y-%m-%d")
     time = now.strftime("%H:%M:%S")
-    file_time = time.replace(":", "-")  # Safe for Windows filenames
+    file_time = time.replace(":", "-")
     event_id_base = now.strftime("%Y%m%d-%H%M%S")
 
-    for encoding, loc in zip(test_encodings, face_locations):
-        name = "Unknown"
+    for i, (encoding, loc) in enumerate(zip(test_encodings, face_locations)):
+        name = None
+        confidence = 1.0
+        
         if len(KNOWN_ENCODINGS) > 0:
             face_distances = face_recognition.face_distance(KNOWN_ENCODINGS, encoding)
             best_match = np.argmin(face_distances)
-            if face_distances[best_match] < 0.6:
+            confidence = face_distances[best_match]
+            if confidence < 0.6:  # Lower is better match
                 name = KNOWN_NAMES[best_match]
-
+        
         top, right, bottom, left = loc
-        detections.append({"name": name, "top": top, "right": right, "bottom": bottom, "left": left})
-
-        if name != "Unknown":
-            # Per-user cooldown (e.g., 60s) to avoid logging every auto-scan
+        
+        if name is None:
+            # Store unknown face data for potential registration
+            unknown_face_encodings.append(encoding.tolist())  # Convert numpy array to list for JSON
+            unknown_face_locations.append(loc)
+            detections.append({
+                "status": "unknown",
+                "face_id": len(unknown_face_encodings) - 1,
+                "top": top, 
+                "right": right, 
+                "bottom": bottom, 
+                "left": left
+            })
+        else:
+            # Handle known face
+            detections.append({
+                "status": "recognized",
+                "name": name,
+                "confidence": float(1 - confidence),  # Convert to 0-1 scale where 1 is best
+                "top": top, 
+                "right": right, 
+                "bottom": bottom, 
+                "left": left
+            })
+            
+            # Log attendance for known faces
             last = LAST_LOGGED.get(name)
             if last and (now - last) < timedelta(seconds=60):
                 continue
+                
             img_path = os.path.join(BASE_DIR, "uploads", f"{name}_{date}_{file_time}.jpg")
             file.stream.seek(0)
             file.save(img_path)
 
-            # Determine next numeric IDs
             global_next_id = _next_id(ATTENDANCE_FILE)
             user_file = os.path.join(USER_ATTENDANCE_DIR, f"{name}.csv")
             user_next_id = _next_id(user_file)
@@ -168,10 +215,84 @@ def recognize_face():
                 if new_file:
                     writer.writerow(["id", "name", "date", "time", "image_path"])
                 writer.writerow([user_next_id, name, date, time, img_path])
-            # Update last logged time
+                
             LAST_LOGGED[name] = now
 
-    return jsonify({"success": True, "detections": detections})
+    response = {
+        "success": True, 
+        "detections": detections
+    }
+    
+    # Add unknown face data if any were found
+    if unknown_face_encodings:
+        response["unknown_faces"] = {
+            "encodings": unknown_face_encodings,
+            "locations": [{"top": t, "right": r, "bottom": b, "left": l} 
+                         for (t, r, b, l) in unknown_face_locations]
+        }
+    
+    return jsonify(response)
+
+@app.route("/api/register_unknown", methods=["POST"])
+def register_unknown_face():
+    try:
+        if not request.is_json:
+            return jsonify({"success": False, "message": "Missing JSON in request"}), 400
+            
+        data = request.get_json()
+        
+        if not all(key in data for key in ["name", "face_index", "encodings"]):
+            return jsonify({"success": False, "message": "Name, face index, and encodings are required"}), 400
+        
+        name = data["name"].strip()
+        face_index = data["face_index"]
+        encodings = data["encodings"]
+        
+        if not name or face_index < 0 or face_index >= len(encodings):
+            return jsonify({"success": False, "message": "Invalid name or face index"}), 400
+        
+        # Get the face encoding
+        try:
+            encoding = np.array(encodings[face_index])
+            
+            # Save the face image (we'll use the first available face from the last recognition)
+            known_faces_dir = os.path.join(BASE_DIR, "known_faces")
+            os.makedirs(known_faces_dir, exist_ok=True)
+            
+            # Generate a unique filename
+            base_filename = f"{name}.jpg"
+            counter = 1
+            while os.path.exists(os.path.join(known_faces_dir, base_filename)):
+                base_filename = f"{name}_{counter}.jpg"
+                counter += 1
+                
+            save_path = os.path.join(known_faces_dir, base_filename)
+            
+            # Try to get the face image from the last recognition
+            if hasattr(recognize_face, 'last_unknown_face_image'):
+                face_image = recognize_face.last_unknown_face_image
+                if face_image is not None:
+                    import cv2
+                    cv2.imwrite(save_path, cv2.cvtColor(face_image, cv2.COLOR_RGB2BGR))
+            
+            # Add to known faces
+            KNOWN_ENCODINGS.append(encoding)
+            KNOWN_NAMES.append(name)
+            
+            # Save the updated encodings to disk
+            np.save(os.path.join(BASE_DIR, "known_encodings.npy"), {"encodings": KNOWN_ENCODINGS, "names": KNOWN_NAMES})
+            
+            return jsonify({
+                "success": True, 
+                "message": f"Successfully registered {name}.",
+                "name": name
+            })
+            
+        except Exception as e:
+            return jsonify({"success": False, "message": f"Error processing face data: {str(e)}"}), 500
+            
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Server error: {str(e)}"}), 500
 
 @app.route("/api/attendance", methods=["GET"])
 def get_attendance():
@@ -212,16 +333,6 @@ def export_csv():
         return jsonify({"error": "No attendance data found."}), 404
     return send_file(ATTENDANCE_FILE, as_attachment=True)
 
-@app.route("/logo.png", methods=["GET"])
-def serve_logo():
-    root_logo = os.path.join(os.path.dirname(BASE_DIR), "image.png")
-    if os.path.exists(root_logo):
-        return send_file(root_logo)
-    # Fallback to static if user moves it there later
-    static_logo = os.path.join(app.static_folder, "image.png")
-    if os.path.exists(static_logo):
-        return send_file(static_logo)
-    return ("", 404)
 
 if __name__ == "__main__":
     app.run(debug=False, port=5000)
